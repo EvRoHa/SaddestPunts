@@ -62,33 +62,72 @@ def surrender_index(punt: dict) -> float:
         else:
             return 3
 
-    def clock(time: int) -> float:
-        return ((time * 0.001) ** 3) + 1
+    def clock(p: dict) -> float:
+        if p['period'] > 2 and p['offense_score'] - p['defense_score'] <= 0:
+            try:
+                m = punt['clock']['minutes']
+            except KeyError:
+                m = 0
+            try:
+                s = punt['clock']['seconds']
+            except KeyError:
+                s = 0
 
-    res = field_position(punt) * first_down_distance(punt) * score_of_game(punt)
+            time = m * 60 + s + 900 * (punt['period'] - 3)
 
-    if punt['period'] > 2 and punt['offense_score'] - punt['defense_score'] < 0:
-        try:
-            m = punt['clock']['minutes']
-        except KeyError:
-            m = 0
-        try:
-            s = punt['clock']['seconds']
-        except KeyError:
-            s = 0
-        return res * clock(m * 60 + s + 900 * (punt['period'] - 3))
+            return ((time * 0.001) ** 3) + 1
+
+        else:
+            return 1
+
+    return field_position(punt) * first_down_distance(punt) * score_of_game(punt) * clock(punt)
+
+
+def punt_to_str(p: dict) -> str:
+    diff = p['offense_score'] - p['defense_score']
+
+    s = '{} punted on 4th and {}'.format(p['offense'], p['distance'])
+
+    if diff > 0:
+        s = ' '.join([s, 'up {} on {} from'.format(diff, p['defense'])])
+    elif diff == 0:
+        s = ' '. join([s, 'while tied with {} from'.format(p['defense'])])
     else:
-        return res
+        s = ' '.join([s, 'down {} against {} from'.format(-diff, p['defense'])])
+
+    if p['yard_line'] < 50:
+        s = ' '.join([s, 'their own {} yard line with'.format(p['yard_line'])])
+    elif p['yard_line'] == 50:
+        s = ' '.join([s, 'the {} yard line with'.format(p['yard_line'])])
+    else:
+        s = ' '.join([s, 'the opposing {} yard line with'.format(100 - p['yard_line'])])
+
+    s = ' '.join([s, '{} minutes {} seconds left in the'.format(p['clock']['minutes'], p['clock']['seconds'])])
+
+    if p['period'] == 1:
+        s = ' '.join([s, 'first quarter.'])
+    elif p['period'] == 2:
+        s = ' '.join([s, 'second quarter.'])
+    elif p['period'] == 3:
+        s = ' '.join([s, 'third quarter.'])
+    else:
+        s = ' '.join([s, 'fourth quarter.'])
+
+    return ' '.join([s, 'Surrender Index: {0:.4f}'.format(p['surrender_index'])])
 
 
-def main(year):
+def main(year, printed=20, csv_out=True):
     punts = fetchPunts(year)
 
     for p in punts:
         p['surrender_index'] = surrender_index(p)
 
     punts.sort(key=lambda x: x['surrender_index'], reverse=True)
-    pd.DataFrame.from_dict(punts).to_csv('Saddest Punts of {}.csv'.format(year))
+    for p in punts[:printed]:
+        print(punt_to_str(p))
+
+    if csv_out:
+        pd.DataFrame.from_dict(punts).to_csv('Saddest Punts of {}.csv'.format(year))
 
 
 if __name__ == '__main__':
